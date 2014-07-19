@@ -4,7 +4,7 @@
 //
 // Based on http://yongsun.me/2013/06/simple-implementation-of-mmseg-with-python/
 // Data files from mmseg4j https://code.google.com/p/mmseg4j/
-// Compile with "g++ -x c++ -o mmseg -std=c++11 mmseg.h"
+// Compile with: g++ -Ofast -march=native -funroll-loops -DMMSEG_MAIN -x c++ -o mmseg -std=c++11 mmseg.h
 // UTF-8 input only
 #pragma once
 
