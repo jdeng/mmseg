@@ -146,7 +146,7 @@ private:
     }
   };
 
-  std::vector<Chunk> get_chunks(StringIt _start, StringIt _end, int depth = 3) {
+  std::vector<Chunk> get_chunks(StringIt _start, StringIt _end, int depth) {
     std::vector<Chunk> ret;
     std::function<void(StringIt, StringIt, int, std::vector<StringP>)> get_chunks_it = [&] (StringIt start, StringIt end, int n, std::vector<StringP> segs) {
       if (n == 0 || start == end) {
@@ -170,12 +170,11 @@ private:
   }
 
 public:
-  std::vector<String> segment(const String& s) {
+  std::vector<String> segment(const String& s, int depth = 3) {
     std::vector<String> ret;
     auto start = s.begin(), end = s.end();
-    const int DEPTH = 5;
     while (start != end) {
-      auto chunks = get_chunks(start, end, DEPTH);
+      auto chunks = get_chunks(start, end, depth);
       auto best = std::max_element(chunks.begin(), chunks.end(), [&](const Chunk& x, const Chunk& y) {
         return std::tie(x.length_, x.mean_, x.var_, x.degree_) < std::tie(y.length_, y.mean_, y.var_, y.degree_);
       });
