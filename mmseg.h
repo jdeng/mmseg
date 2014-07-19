@@ -118,13 +118,14 @@ private:
   std::unordered_map<Char, int> char_freqs_;
   Trie dict_;
 
+  static size_t length(const StringP& w) { return std::distance(w.first, w.second); }
+
   struct Chunk {
     std::vector<StringP> words_;
     size_t length_ = 0;
     float mean_ = 0, var_ = 0, degree_ = 0;
 
     Chunk(std::vector<StringP> words, const std::unordered_map<Char, int>& chars) : words_(std::move(words)) {
-      auto length = [](const StringP& w) { return std::distance(w.first, w.second); };
       length_ = std::accumulate(words_.begin(), words_.end(), size_t(0), [&](size_t n, const StringP& w) { return n + length(w); });
       mean_ = float(length_) / words_.size();
       var_ = - std::accumulate(words_.begin(), words_.end(), float(0), [&](size_t n, const StringP& w) { return  n + (length(w) - mean_) * (length(w) - mean_); }) / words_.size();
@@ -155,7 +156,7 @@ private:
         auto m = dict_.match_all(start, end);
         for (auto& w: m) {
           auto nsegs = segs;
-          auto len = std::distance(w.first, w.second);
+          auto len = length(w);
           nsegs.emplace_back(std::move(w));
           get_chunks_it(start + len, end, n - 1, std::move(nsegs));
         }
@@ -181,7 +182,7 @@ public:
 
 //      for (auto& c: chunks) std::cout << c.to_string() << std::endl; std::cout << std::endl;
       auto& word = best->words_.front();
-      start += std::distance(word.first, word.second);
+      start += length(word);
       ret.emplace_back(String(word.first, word.second));
     }
 
@@ -237,7 +238,7 @@ int main(int argc, const char *argv[]) {
     auto s = MMSeg::from_utf8(ss.str());
     time_t now = time(0);
     auto w = mmseg.segment(s);
-    std::cout << "Done in " << time(0)  - now << " seconds," << w.size() << " words from " << s.size() << " chars" << std::endl;
+    std::cout << "Done in " << time(0)  - now << " seconds, " << w.size() << " words from " << s.size() << " chars" << std::endl;
     return 0;
   }
 
