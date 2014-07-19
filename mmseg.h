@@ -12,6 +12,7 @@
 #include <vector>
 #include <unordered_map>
 #include <numeric>
+#include <algorithm>
 #include <functional>
 #include <fstream>
 #include <sstream>
@@ -28,6 +29,7 @@ public:
 	using Char = char16_t;
 	using String = std::u16string;
 	using StringIt = String::const_iterator;
+	using StringP = std::pair<StringIt, StringIt>;
 	using Dict = std::unordered_map<Char, int>;
 
 	inline static std::string trim(const std::string& s, const std::string& whitespace = "\r\n \t")
@@ -67,8 +69,13 @@ public:
 private:
 	struct Trie {
 		struct Node {
-			std::unordered_map<Char, Node> trans_;
+			std::unordered_map<Char, Node*> trans_;
 			bool val_ = false;
+			
+			~Node() {
+				for (auto& it: trans_) delete it.second;
+				trans_.clear();
+			}
 		};
 
 		Node root_;
@@ -79,18 +86,18 @@ private:
 			for (auto ch: word) {
 				auto it = current->trans_.find(ch);
 				if (it == current->trans_.end()) {
-					auto ret = current->trans_.emplace(ch, Node{});
-					current = &ret.first->second;	
+					auto ret = current->trans_.emplace(ch, new Node{});
+					current = ret.first->second;
 				}
 				else {
-					current = &it->second;	
+					current = it->second;	
 				}
 			}
 			current->val_ = true;
 		}
 
-		std::vector<String> match_all(StringIt start, StringIt end) {
-			std::vector<String> ret;
+		std::vector<StringP> match_all(StringIt start, StringIt end) {
+			std::vector<StringP> ret;
 			Node *current = &root_;
 			StringIt _start = start;
 			for (; start != end; ++start) {
@@ -99,7 +106,7 @@ private:
 				if (it == current->trans_.end())
 					break;
 				
-				current = &it->second;
+				current = it->second;
 				if (current->val_) ret.emplace_back(_start, start + 1);
 			}
 
@@ -113,18 +120,19 @@ private:
 	Trie dict_;
 
 	struct Chunk {
-		std::vector<String> words_;
+		std::vector<StringP> words_;
 		size_t length_ = 0;
 		float mean_ = 0, var_ = 0, degree_ = 0;
 
-		Chunk(std::vector<String> words, const std::unordered_map<Char, int>& chars) : words_(std::move(words)) {
-			length_ = std::accumulate(words_.begin(), words_.end(), size_t(0), [](size_t n, const String& w) { return n + w.length(); });
+		Chunk(std::vector<StringP> words, const std::unordered_map<Char, int>& chars) : words_(std::move(words)) {
+			auto length = [](const StringP& w) { return std::distance(w.first, w.second); };
+			length_ = std::accumulate(words_.begin(), words_.end(), size_t(0), [&](size_t n, const StringP& w) { return n + length(w); });
 			mean_ = float(length_) / words_.size();
-			var_ = - std::accumulate(words_.begin(), words_.end(), float(0), [&](size_t n, const String& w) { return  n + (w.length() - mean_) * (w.length() - mean_); }) / words_.size();
+			var_ = - std::accumulate(words_.begin(), words_.end(), float(0), [&](size_t n, const StringP& w) { return  n + (length(w) - mean_) * (length(w) - mean_); }) / words_.size();
 			
 			for (auto& w: words_) {
-				if (w.length() != 1) continue;
-				auto it = chars.find(w[0]);
+				if (length(w) != 1) continue;
+				auto it = chars.find(*w.first);
 				if (it != chars.end()) 
 					degree_ += log(float(it->second));
 			}
@@ -132,7 +140,7 @@ private:
 		
 		std::string to_string() const {
 			std::string s;
-			for (auto& w: words_) { s += to_utf8(w) + " "; }
+			for (auto& w: words_) { s += to_utf8(String(w.first, w.second)) + " "; }
 			s += "(" + std::to_string(length_) + " " + std::to_string(mean_) + " " + std::to_string(var_) + " " + std::to_string(degree_) + ")";
 			return s;
 		}
@@ -140,7 +148,7 @@ private:
 
 	std::vector<Chunk> get_chunks(StringIt _start, StringIt _end, int depth = 3) {
 		std::vector<Chunk> ret;
-		std::function<void(StringIt, StringIt, int, std::vector<String>)> get_chunks_it = [&] (StringIt start, StringIt end, int n, std::vector<String> segs) {
+		std::function<void(StringIt, StringIt, int, std::vector<StringP>)> get_chunks_it = [&] (StringIt start, StringIt end, int n, std::vector<StringP> segs) {
 			if (n == 0 || start == end) {
 				ret.emplace_back(std::move(segs), char_freqs_);
 			}
@@ -148,16 +156,16 @@ private:
 				auto m = dict_.match_all(start, end);
 				for (auto& w: m) {
 					auto nsegs = segs;
-					auto len = w.length();
+					auto len = std::distance(w.first, w.second);
 					nsegs.emplace_back(std::move(w));
 					get_chunks_it(start + len, end, n - 1, std::move(nsegs));
 				}
-				segs.emplace_back(String(1, *start));
+				segs.emplace_back(start, start +1 );
 				get_chunks_it(start + 1, end, n - 1, std::move(segs));
 			}
 		};
 
-		get_chunks_it(_start, _end, depth, std::vector<String>{});
+		get_chunks_it(_start, _end, depth, std::vector<StringP>{});
 		return ret;
 	}
 
@@ -165,7 +173,7 @@ public:
 	std::vector<String> segment(const String& s) {
 		std::vector<String> ret;
 		auto start = s.begin(), end = s.end();
-		const int DEPTH = 3;
+		const int DEPTH = 5;
 		while (start != end) {
 			auto chunks = get_chunks(start, end, DEPTH);
 			auto best = std::max_element(chunks.begin(), chunks.end(), [&](const Chunk& x, const Chunk& y) {
@@ -174,8 +182,8 @@ public:
 
 //			for (auto& c: chunks) std::cout << c.to_string() << std::endl; std::cout << std::endl;
 			auto& word = best->words_.front();
-			start += word.length();
-			ret.emplace_back(word);
+			start += std::distance(word.first, word.second);
+			ret.emplace_back(String(word.first, word.second));
 		}
 
 		return ret;
