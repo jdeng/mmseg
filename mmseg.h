@@ -30,7 +30,6 @@ public:
   using String = std::u16string;
   using StringIt = String::const_iterator;
   using StringP = std::pair<StringIt, StringIt>;
-  using Dict = std::unordered_map<Char, int>;
 
   inline static std::string trim(const std::string& s, const std::string& whitespace = "\r\n \t")
   {
