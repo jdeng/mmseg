@@ -78,7 +78,6 @@ private:
     };
 
     Node root_;
-    Trie() {}
 
     void add(const String& word) {
       Node *current = &root_;
